@@ -15,16 +15,6 @@ const bssheet_name = 'シート1';
 const plsheet_name = 'シート2';
 
 
-//at first run this function to set properties namely Zerion API and Google Sheets ID 
-function setProperty() {
-
-  const scriptProperties = PropertiesService.getScriptProperties();
-  scriptProperties.setProperties({
-    'ZerionAPI': "zk_dev_yourkeyhere",
-    'Google_Sheets_ID': "yoursheetIDhere"
-  });
-}
-
 //function to retrieve data, store in Sheets and set trigger for next run on month end
 function getalldata() {
 
@@ -35,12 +25,13 @@ function getalldata() {
   var today = new Date();
   var suburl = 'https://api.thegraph.com/subgraphs/name/balancer-labs/balancer';
   var output = [];
+  var authheader = { "Authorization": "Basic " + Utilities.base64Encode(USERNAME + ":") };
+  var params = { "method": "GET", "headers": authheader };
 
   for (var a = 0; a < mywalletaddresses.length; a++) {
     var myaddress = mywalletaddresses[a];
     var url = `https://api.zerion.io/v1/wallets/${myaddress}/positions/?currency=${currency}&sort=value`;
-    var authheader = { "Authorization": "Basic " + Utilities.base64Encode(USERNAME + ":") };
-    var params = { "method": "GET", "headers": authheader };
+
     var json = JSON.parse(UrlFetchApp.fetch(url, params));
 
     for (var i = 0; i < json.data.length; i++) {
@@ -48,17 +39,18 @@ function getalldata() {
       if (obj.attributes.fungible_info.symbol == "BPT-V1") {
         var lpTokenAddress = obj.attributes.fungible_info.implementations[0].address;
         var lpTokenQuery = `
-          query {
-            pool(id: "${lpTokenAddress}") {
-            tokens {
-                symbol
-                balance
-                address
-                name
+            query {
+              pool(id: "${lpTokenAddress}") {
+              totalShares
+              tokens {
+                  symbol
+                  balance
+                  address
+                  name
+                }
               }
             }
-          }
-          `;
+            `;
         var lpTokenResponse = UrlFetchApp.fetch(suburl, {
           'method': 'post',
           'payload': JSON.stringify({ 'query': lpTokenQuery }),
@@ -68,7 +60,7 @@ function getalldata() {
 
         for (var j = 0; j < lpTokenJson.data.pool.tokens.length; j++) {
           var underlyingToken = lpTokenJson.data.pool.tokens[j].symbol;
-          var underlyingTokenBalance = lpTokenJson.data.pool.tokens[j].balance;
+          var underlyingTokenBalance = lpTokenJson.data.pool.tokens[j].balance * obj.attributes.quantity.numeric / lpTokenJson.data.pool.totalShares;
           var underlyingTokenaddress = lpTokenJson.data.pool.tokens[j].address;
           var underlyingTokenname = lpTokenJson.data.pool.tokens[j].name;
           var url2 = `https://api.zerion.io/v1/fungibles/${underlyingTokenaddress}?currency=${currency}`
@@ -105,12 +97,13 @@ function getalldata() {
         }
     };
   };
+
   var startRow = sheet.getLastRow() + 1;
   var rowLength = output.length;
   var colLength = output[0].length;
   var range = sheet.getRange(startRow, 1, rowLength, colLength);
   range.setValues(output);
-  sheet.getRange(startRow, 1, sheet.getLastRow() - startRow + 1, colLength).sort([{column: 1, ascending: true}, {column: 5, ascending: false}]);
+  sheet.getRange(startRow, 1, sheet.getLastRow() - startRow + 1, colLength).sort([{ column: 1, ascending: true }, { column: 5, ascending: false }]);
   getpldata();
   setTrigger();
 }
@@ -145,12 +138,15 @@ function getpldata() {
   var m = now.getMonth();
   var firstdayofmonth = new Date(y, m, 1, 00, 00);
   var dateISO = Utilities.formatDate(firstdayofmonth, 'UTC', 'yyyy-MM-dd\'T\'HH:mm:ss\'Z\'');
+  var authheader = { "Authorization": "Basic " + Utilities.base64Encode(USERNAME + ":") };
+  var params = { "method": "GET", "headers": authheader };
+  var txjpPricedata = JSON.parse(UrlFetchApp.fetch('https://api.zerion.io/v1/fungibles/0x961dd84059505d59f82ce4fb87d3c09bec65301d?currency=jpy', params));
+  var txjpPrice = txjpPricedata.data.attributes.market_data.price;
+
 
   for (var a = 0; a < mywalletaddresses.length; a++) {
     var myaddress = mywalletaddresses[a];
     var url = `https://api.zerion.io/v1/wallets/${myaddress}/transactions/?currency=${currency}`;
-    var authheader = { "Authorization": "Basic " + Utilities.base64Encode(USERNAME + ":") };
-    var params = { "method": "GET", "headers": authheader };
     var json = JSON.parse(UrlFetchApp.fetch(url, params));
 
     for (var i = 0; i < json.data.length; i++) {
@@ -180,6 +176,11 @@ function getpldata() {
               transferQuantity = transfer.quantity.numeric;
               transferValue = transfer.value;
               transferPrice = transfer.price;
+
+              if (transferSymbol == "TXJP") {
+                transferPrice = txjpPrice;
+                transferValue = transfer.quantity.numeric * txjpPrice;
+              }
 
             } else if (transfer.nft_info) {
 
@@ -239,10 +240,9 @@ function getpldata() {
   var range = sheet.getRange(startRow, 1, rowLength, colLength);
   range.setValues(output);
   var lastrow = sheet.getLastRow();
-  var lastcol = sheet.getLastColumn();  
+  var lastcol = sheet.getLastColumn();
   sheet.getRange(2, 1, lastrow, lastcol).sort(1);
 
-<<<<<<< HEAD
 }
 
 //at first run this function to set properties namely Zerion API and Google Sheets ID 
@@ -250,9 +250,7 @@ function setProperty() {
 
   const scriptProperties = PropertiesService.getScriptProperties();
   scriptProperties.setProperties({
-    'ZerionAPI': "zk_dev_yourkey",
-    'Google_Sheets_ID': "yourID"
+    'ZerionAPI': "zk_dev_your key",
+    'Google_Sheets_ID': "your sheet id"
   });
-=======
->>>>>>> parent of 82a2160 (Update GASgetdata.js)
 }
